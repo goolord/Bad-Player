@@ -1,0 +1,53 @@
+# systemd unit for running Bad Player on a non-NixOS host with Nix installed
+# (e.g. the stock Ubuntu or Oracle Linux images on Oracle Cloud).
+#
+# Install the bot into a dedicated profile so this path stays stable:
+#   sudo nix profile install --profile /nix/var/nix/profiles/bad-player .#bad-player
+# Put the token in /etc/bad-player/token (mode 600, owned by root), then:
+#   sudo cp deploy/bad-player.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now bad-player
+
+[Unit]
+Description=Bad Player Discord bot
+Wants=network-online.target
+After=network-online.target
+# Never give up restarting; Discord or network outages can last longer than
+# systemd's default burst limit.
+StartLimitIntervalSec=0
+
+[Service]
+ExecStart=/nix/var/nix/profiles/bad-player/bin/bad-player
+LoadCredential=bot-token:/etc/bad-player/token
+Environment=BOT_TOKEN_FILE=%d/bot-token
+Environment=PLAYLIST_CHANNEL=bad-playlist
+Environment=CATCHUP_HOURS=24
+Restart=always
+RestartSec=10s
+
+# The bot uses tens of MB; this only guards small VMs against a runaway process.
+MemoryMax=512M
+
+DynamicUser=yes
+CapabilityBoundingSet=
+NoNewPrivileges=yes
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=invisible
+ProtectSystem=strict
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+
+[Install]
+WantedBy=multi-user.target
