@@ -1,14 +1,14 @@
 packages: .
 with-compiler: ghc-9.10.3
 tests: True
+-- same plan locally and in CI
+index-state: 2026-10-10T15:43:10Z
 
--- calamity 0.12.1 and aeson-optics have stale upper bounds that exclude
--- GHC 9.10; both build fine with the newer versions.
+-- stale upper bounds; both build fine on 9.10
 allow-newer:
   , calamity:typerep-map
   , aeson-optics:base
 
--- data-default 0.8 defines its own Default class, while calamity's TLS stack
--- (tls 2.0, crypton-connection, http-client-tls) still uses
--- data-default-class 0.1. Older data-default re-exports that class instead.
+-- data-default 0.8 has its own Default class, but the tls 2.0 stack calamity
+-- resolves to here still uses data-default-class 0.1's
 constraints: data-default <0.8

@@ -1,14 +1,15 @@
 {
-  description = "Bad Player: a Discord bot that only allows YouTube video links in text channels";
+  description = "Discord bot that keeps a channel YouTube-links-only";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+  # pinned by rev: no flake.lock, nothing local to generate one
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/7c8764b7c7b09b34f632464276218ef9090eaa11";
 
   outputs =
     { self, nixpkgs }:
     let
       inherit (nixpkgs) lib;
 
-      # Oracle Cloud's Ampere A1 shapes are aarch64; the E2 micro shapes are x86_64.
+      # oracle A1 is aarch64, E2 micro is x86_64
       systems = [
         "x86_64-linux"
         "aarch64-linux"
@@ -25,32 +26,27 @@
         ];
       };
 
-      # GHC 9.10, the same compiler cabal.project pins.
-      haskellPackagesFor =
-        pkgs:
-        pkgs.haskell.packages.ghc910.override {
-          overrides = hself: hsuper: {
-            # nixpkgs marks calamity broken only because its upper bounds
-            # exclude data-default-class 0.2 and typerep-map 0.7; it builds fine
-            # against both.
-            calamity = lib.pipe hsuper.calamity [
-              pkgs.haskell.lib.compose.doJailbreak
-              pkgs.haskell.lib.compose.markUnbroken
-            ];
-            bad-player = hself.callCabal2nix "bad-player" src { };
-          };
-        };
+      overrides = pkgs: hself: hsuper: {
+        # marked broken only over stale bounds (data-default-class, typerep-map)
+        calamity = lib.pipe hsuper.calamity [
+          pkgs.haskell.lib.compose.doJailbreak
+          pkgs.haskell.lib.compose.markUnbroken
+        ];
+        bad-player = hself.callCabal2nix "bad-player" src { };
+      };
+
+      # same GHC as cabal.project
+      haskellPackagesFor = pkgs: pkgs.haskell.packages.ghc910.extend (overrides pkgs);
 
       badPlayerFor =
         pkgs:
         let
-          # Only the executable, so the runtime closure doesn't pull in GHC.
+          # keeps GHC out of the runtime closure
           exe = pkgs.haskell.lib.compose.justStaticExecutables (haskellPackagesFor pkgs).bad-player;
         in
         exe.overrideAttrs (old: {
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];
-          # TLS needs CA certificates. Ship nixpkgs' bundle so the binary works
-          # on any distro, while still letting SYSTEM_CERTIFICATE_PATH override it.
+          # don't rely on the host having a CA bundle where tls looks for one
           postFixup = (old.postFixup or "") + ''
             wrapProgram $out/bin/bad-player \
               --set-default SYSTEM_CERTIFICATE_PATH ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
@@ -66,8 +62,8 @@
         default = bad-player;
       });
 
+      # building runs the tests
       checks = forAllSystems (pkgs: {
-        # Building runs the link-matcher test suite.
         bad-player = badPlayerFor pkgs;
       });
 
@@ -104,35 +100,26 @@
               type = lib.types.package;
               default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
               defaultText = lib.literalExpression "bad-player.packages.\${system}.default";
-              description = "The Bad Player package to run.";
+              description = "Bad Player package to run.";
             };
 
             tokenFile = lib.mkOption {
-              # A string rather than a path so the secret is never copied into
-              # the world-readable Nix store.
+              # str, not path: a path would copy the secret into the store
               type = lib.types.str;
               example = "/etc/bad-player/token";
-              description = ''
-                File containing the Discord bot token. It is passed to the
-                service as a systemd credential, so it can stay readable by
-                root only.
-              '';
+              description = "File with the bot token. Loaded as a systemd credential, so it can be root-only.";
             };
 
             playlistChannel = lib.mkOption {
               type = lib.types.str;
               default = "bad-playlist";
-              description = "Name of the text channel that only allows YouTube video links.";
+              description = "Name of the YouTube-links-only channel.";
             };
 
             catchUpHours = lib.mkOption {
               type = lib.types.ints.unsigned;
               default = 24;
-              description = ''
-                On every fresh connection, re-check messages in the playlist channel
-                posted within this many hours, to moderate anything sent while
-                the bot was down. 0 disables this.
-              '';
+              description = "How far back to recheck the channel on connect, to cover downtime. 0 disables.";
             };
           };
 
@@ -142,8 +129,7 @@
               wantedBy = [ "multi-user.target" ];
               wants = [ "network-online.target" ];
               after = [ "network-online.target" ];
-              # Never give up restarting; Discord or network outages can last
-              # longer than systemd's default burst limit.
+              # outages can outlast the default burst limit
               startLimitIntervalSec = 0;
 
               environment = {
@@ -158,8 +144,7 @@
                 Restart = "always";
                 RestartSec = "10s";
 
-                # The bot uses tens of MB; this only guards small VMs against
-                # a runaway process.
+                # uses tens of MB; this is a safety net for 1G VMs
                 MemoryMax = "512M";
 
                 DynamicUser = true;

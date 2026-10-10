@@ -17,14 +17,6 @@ isOnlyYouTubeLinks t = case T.words t of
   where
     unwrapAngles w = fromMaybe w (T.stripPrefix "<" w >>= T.stripSuffix ">")
 
--- | True when the text is a single http(s) URL pointing at a YouTube video.
---
--- Accepted shapes:
---
--- * @youtube.com/watch?v=ID@ (also @www.@, @m.@ and @music.@)
--- * @youtube.com/shorts/ID@, @/live/ID@, @/embed/ID@, @/v/ID@
--- * @youtu.be/ID@
--- * @youtube-nocookie.com/embed/ID@
 isYouTubeVideoUrl :: Text -> Bool
 isYouTubeVideoUrl t = fromMaybe False do
   uri <- mkURI t
@@ -53,7 +45,7 @@ isVideoLocation host segments query
     mainHosts = ["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"]
     noCookieHosts = ["youtube-nocookie.com", "www.youtube-nocookie.com"]
 
--- | YouTube video IDs are 11 characters from the URL-safe base64 alphabet.
+-- ids are 11 chars of url-safe base64; rejects channel/playlist lookalikes
 isVideoId :: Text -> Bool
 isVideoId s = T.length s == 11 && T.all isIdChar s
   where

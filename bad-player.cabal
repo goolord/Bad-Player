@@ -1,10 +1,10 @@
 cabal-version:      3.0
 name:               bad-player
 version:            0.1.0.0
-synopsis:           Discord bot that only allows YouTube video links in text channels
+synopsis:           Discord bot that keeps a channel YouTube-links-only
 license:            NONE
 build-type:         Simple
-tested-with:        GHC ==9.10.3
+tested-with:        GHC ==9.10.3 || ==9.12.4
 
 common shared
   default-language:   GHC2021

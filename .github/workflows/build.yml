@@ -1,0 +1,88 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nix:
+    name: nix (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+      # builds the package (tests included) and evaluates the nixos module
+      - run: nix flake check -L
+
+  static:
+    name: static (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/cache@v6
+        with:
+          path: .ci-cache
+          key: static-${{ matrix.arch }}-${{ hashFiles('cabal.project', '*.cabal', 'ci/build-static.sh') }}
+          restore-keys: static-${{ matrix.arch }}-
+
+      # docker run rather than a job container: js actions don't run in
+      # alpine containers on arm runners
+      - name: Build
+        run: docker run --rm -v "$PWD:/src" -w /src alpine:3.22 sh ci/build-static.sh
+
+      - name: Smoke test
+        run: |
+          file dist/bad-player-${{ matrix.arch }}-linux
+          # outside the build container, so any dynamic dep would fail here
+          out=$(./dist/bad-player-${{ matrix.arch }}-linux 2>&1 || true)
+          echo "$out"
+          grep -q "Set BOT_TOKEN_FILE or BOT_TOKEN" <<<"$out"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bad-player-${{ matrix.arch }}-linux
+          path: dist/bad-player-${{ matrix.arch }}-linux
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [nix, static]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          sha256sum bad-player-* > SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --generate-notes bad-player-* SHA256SUMS

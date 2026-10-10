@@ -57,6 +57,7 @@ runBot cfg =
 intents :: Intents
 intents = intentGuilds .+. intentGuildMessages .+. messageContent
   where
+    -- calamity has no name for this one
     messageContent = Intents (bit 15)
 
 data Notify = WarnAuthor | Silently
@@ -91,6 +92,7 @@ isPlaylistChannel playlist = \case
   GuildTextChannel chan -> chan ^. #name == playlist
   _ -> False
 
+-- embed unfurls arrive as updates too, but without an edit timestamp
 wasEdited :: UpdatedMessage -> Bool
 wasEdited update = case update ^. #editedTimestamp of
   Just (NotNull _) -> True

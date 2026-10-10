@@ -8,15 +8,8 @@ import System.Exit (die)
 import System.IO (BufferMode (..), hSetBuffering, stderr, stdout)
 import Text.Read (readMaybe)
 
--- | Configuration:
---
--- * @BOT_TOKEN_FILE@: path to a file holding the bot token (preferred, e.g.
---   a systemd credential), or
--- * @BOT_TOKEN@: the token itself.
--- * @PLAYLIST_CHANNEL@: name of the YouTube-only text channel (default
---   bad-playlist).
--- * @CATCHUP_HOURS@: how far back to check messages on startup (default 24,
---   0 disables).
+-- env: BOT_TOKEN_FILE (preferred, keeps the token out of the environment)
+-- or BOT_TOKEN, PLAYLIST_CHANNEL (bad-playlist), CATCHUP_HOURS (24, 0 = off)
 main :: IO ()
 main = do
   -- systemd

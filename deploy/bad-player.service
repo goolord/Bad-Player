@@ -1,23 +1,22 @@
-# systemd unit for running Bad Player on a non-NixOS host with Nix installed
-# (e.g. the stock Ubuntu or Oracle Linux images on Oracle Cloud).
-#
-# Install the bot into a dedicated profile so this path stays stable:
-#   sudo nix profile install --profile /nix/var/nix/profiles/bad-player .#bad-player
-# Put the token in /etc/bad-player/token (mode 600, owned by root), then:
-#   sudo cp deploy/bad-player.service /etc/systemd/system/
+# for the static binary from CI/releases; no nix needed on the host
+#   sudo install -m 755 bad-player-aarch64-linux /usr/local/bin/bad-player
+#   sudo install -d -m 700 /etc/bad-player
+#   sudo sh -c 'umask 077; cat > /etc/bad-player/token'    # paste token, Ctrl-D
+#   sudo install -m 644 bad-player.service /etc/systemd/system/
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now bad-player
+#
+# install, not mv: mv keeps home-dir SELinux labels on oracle linux
 
 [Unit]
 Description=Bad Player Discord bot
 Wants=network-online.target
 After=network-online.target
-# Never give up restarting; Discord or network outages can last longer than
-# systemd's default burst limit.
+# outages can outlast the default burst limit
 StartLimitIntervalSec=0
 
 [Service]
-ExecStart=/nix/var/nix/profiles/bad-player/bin/bad-player
+ExecStart=/usr/local/bin/bad-player
 LoadCredential=bot-token:/etc/bad-player/token
 Environment=BOT_TOKEN_FILE=%d/bot-token
 Environment=PLAYLIST_CHANNEL=bad-playlist
@@ -25,7 +24,7 @@ Environment=CATCHUP_HOURS=24
 Restart=always
 RestartSec=10s
 
-# The bot uses tens of MB; this only guards small VMs against a runaway process.
+# uses tens of MB; this is a safety net for 1G VMs
 MemoryMax=512M
 
 DynamicUser=yes
